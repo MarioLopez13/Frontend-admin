@@ -3,10 +3,48 @@ import type {
   TransactionSummary,
   TransactionView,
 } from "../types/transaction.types";
-import { mockTransactions } from "./transactions.mock";
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "/api";
+
+type BackendTransaction = {
+  id?: string;
+  transactionId?: string;
+  method?: string;
+  status?: string;
+  processedAt?: string;
+  userId?: string;
+  busCode?: string;
+  routeName?: string;
+  amount?: number;
+  previousBalance?: number;
+  updatedBalance?: number;
+};
 
 function normalize(value: string) {
   return value.trim().toLowerCase();
+}
+
+function mapBackendTransaction(t: BackendTransaction): TransactionView {
+  const id = String(t.id ?? t.transactionId ?? "");
+  const method = (t.method ?? "QR").toUpperCase() as "QR" | "NFC";
+
+  return {
+    id,
+    reference: id,
+    userName: String(t.userId ?? "Usuario demo"),
+    userEmail: `${String(t.userId ?? "demo-user")}@smartpayut.local`,
+    method,
+    status: t.status === "Completado" ? "APPROVED" : "PENDING",
+    amount: Number(t.amount ?? 0),
+    busCode: String(t.busCode ?? "BUS-DEMO"),
+    busLabel: String(t.busCode ?? "BUS-DEMO"),
+    routeName: String(t.routeName ?? "Ruta demo"),
+    createdAt: String(t.processedAt ?? new Date().toISOString()),
+    updatedAt: String(t.processedAt ?? new Date().toISOString()),
+    description: `Pago realizado mediante ${method}`,
+    technicalMessage: null,
+  };
 }
 
 function matchesDateRange(transaction: TransactionView, filters: TransactionFilters) {
@@ -46,11 +84,30 @@ function matchesSearch(transaction: TransactionView, search: string) {
   return searchable.includes(query);
 }
 
+async function fetchTransactions(): Promise<TransactionView[]> {
+  const res = await fetch(`${API_BASE_URL}/mobile-payments`);
+
+  if (!res.ok) {
+    throw new Error("Error al obtener transacciones del backend.");
+  }
+
+  const data = await res.json();
+  const items = data.items ?? data.data ?? data.content ?? [];
+
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item) =>
+    mapBackendTransaction(item as BackendTransaction)
+  );
+}
+
 export const transactionsService = {
   async getTransactions(filters: TransactionFilters): Promise<TransactionView[]> {
-    await new Promise((resolve) => window.setTimeout(resolve, 250));
+    const transactions = await fetchTransactions();
 
-    return mockTransactions
+    return transactions
       .filter((transaction) => {
         const statusMatch =
           filters.status === "all" || transaction.status === filters.status;
@@ -71,23 +128,23 @@ export const transactionsService = {
   },
 
   async getSummary(): Promise<TransactionSummary> {
-    await new Promise((resolve) => window.setTimeout(resolve, 200));
+    const transactions = await fetchTransactions();
 
-    const approved = mockTransactions.filter(
+    const approved = transactions.filter(
       (transaction) => transaction.status === "APPROVED"
     );
-    const pending = mockTransactions.filter(
+    const pending = transactions.filter(
       (transaction) => transaction.status === "PENDING"
     );
-    const failed = mockTransactions.filter(
+    const failed = transactions.filter(
       (transaction) => transaction.status === "FAILED"
     );
-    const cancelled = mockTransactions.filter(
+    const cancelled = transactions.filter(
       (transaction) => transaction.status === "CANCELLED"
     );
 
     return {
-      total: mockTransactions.length,
+      total: transactions.length,
       approved: approved.length,
       pending: pending.length,
       failed: failed.length,
@@ -99,36 +156,3 @@ export const transactionsService = {
     };
   },
 };
-
-/*
-Contrato esperado para backend Sprint 3:
-
-GET /transactions?search=&status=&method=&dateFrom=&dateTo=
-Respuesta sugerida:
-{
-  "items": [
-    {
-      "id": "uuid",
-      "reference": "SPU-QR-20260517-001",
-      "userName": "Juan Pérez",
-      "userEmail": "juan.perez@test.com",
-      "method": "QR",
-      "status": "APPROVED",
-      "amount": 0.35,
-      "busCode": "BUS-001",
-      "busLabel": "Bus 001",
-      "routeName": "12 de Octubre",
-      "createdAt": "2026-05-17T08:15:00",
-      "updatedAt": "2026-05-17T08:15:03",
-      "description": "Pago realizado mediante QR",
-      "technicalMessage": null
-    }
-  ]
-}
-
-Estados usados por frontend:
-APPROVED, PENDING, FAILED, CANCELLED
-
-Métodos usados por frontend:
-QR, NFC
-*/

@@ -1,4 +1,17 @@
-import { mockPayments } from "@/mocks/payments";
+import { useEffect, useState } from "react";
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "/api";
+
+type PaymentView = {
+  id: string;
+  busCode: string;
+  routeName: string;
+  method: string;
+  amount: number;
+  status: string;
+  createdAt: string;
+};
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-EC", {
@@ -8,7 +21,7 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function getStatusLabel(status: "APPROVED" | "PENDING" | "FAILED") {
+function getStatusLabel(status: string) {
   switch (status) {
     case "APPROVED":
       return "Aprobado";
@@ -21,7 +34,7 @@ function getStatusLabel(status: "APPROVED" | "PENDING" | "FAILED") {
   }
 }
 
-function getStatusClass(status: "APPROVED" | "PENDING" | "FAILED") {
+function getStatusClass(status: string) {
   switch (status) {
     case "APPROVED":
       return "border-green-200 bg-green-50 text-green-700";
@@ -35,16 +48,50 @@ function getStatusClass(status: "APPROVED" | "PENDING" | "FAILED") {
 }
 
 export default function PaymentsPage() {
-  const approved = mockPayments.filter(
+  const [payments, setPayments] = useState<PaymentView[]>([]);
+
+  useEffect(() => {
+    loadPayments();
+  }, []);
+
+  async function loadPayments() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/mobile-payments`);
+
+      const data = await response.json();
+
+      const items = data.items ?? data.data ?? [];
+
+      const mapped: PaymentView[] = items.map((item: any) => ({
+        id: item.id ?? item.transactionId ?? "",
+        busCode: item.busCode ?? "BUS-DEMO",
+        routeName: item.routeName ?? "Ruta demo",
+        method: item.method ?? "QR",
+        amount: Number(item.amount ?? 0),
+        status:
+          item.status === "Completado" ? "APPROVED" : "PENDING",
+        createdAt: item.processedAt ?? "",
+      }));
+
+      setPayments(mapped);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  const approved = payments.filter(
     (payment) => payment.status === "APPROVED"
   ).length;
-  const pending = mockPayments.filter(
+
+  const pending = payments.filter(
     (payment) => payment.status === "PENDING"
   ).length;
-  const failed = mockPayments.filter(
+
+  const failed = payments.filter(
     (payment) => payment.status === "FAILED"
   ).length;
-  const totalAmount = mockPayments
+
+  const totalAmount = payments
     .filter((payment) => payment.status === "APPROVED")
     .reduce((acc, payment) => acc + payment.amount, 0);
 
@@ -61,18 +108,22 @@ export default function PaymentsPage() {
         <article className="rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-sm text-slate-500">Transacciones</p>
           <p className="mt-2 text-3xl font-bold text-slate-900">
-            {mockPayments.length}
+            {payments.length}
           </p>
         </article>
 
         <article className="rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-sm text-slate-500">Aprobadas</p>
-          <p className="mt-2 text-3xl font-bold text-green-700">{approved}</p>
+          <p className="mt-2 text-3xl font-bold text-green-700">
+            {approved}
+          </p>
         </article>
 
         <article className="rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-sm text-slate-500">Pendientes</p>
-          <p className="mt-2 text-3xl font-bold text-amber-700">{pending}</p>
+          <p className="mt-2 text-3xl font-bold text-amber-700">
+            {pending}
+          </p>
         </article>
 
         <article className="rounded-xl border border-slate-200 bg-white p-5">
@@ -105,7 +156,7 @@ export default function PaymentsPage() {
             </thead>
 
             <tbody>
-              {mockPayments.map((payment) => (
+              {payments.map((payment) => (
                 <tr
                   key={payment.id}
                   className="border-t border-slate-100 text-sm text-slate-700"
@@ -113,12 +164,23 @@ export default function PaymentsPage() {
                   <td className="px-4 py-3 font-medium text-slate-900">
                     {payment.id}
                   </td>
-                  <td className="px-4 py-3">{payment.busLabel}</td>
-                  <td className="px-4 py-3">{payment.routeName}</td>
-                  <td className="px-4 py-3">{payment.method}</td>
+
+                  <td className="px-4 py-3">
+                    {payment.busCode}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {payment.routeName}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {payment.method}
+                  </td>
+
                   <td className="px-4 py-3">
                     {formatCurrency(payment.amount)}
                   </td>
+
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusClass(
@@ -128,7 +190,10 @@ export default function PaymentsPage() {
                       {getStatusLabel(payment.status)}
                     </span>
                   </td>
-                  <td className="px-4 py-3">{payment.createdAt}</td>
+
+                  <td className="px-4 py-3">
+                    {new Date(payment.createdAt).toLocaleString("es-EC")}
+                  </td>
                 </tr>
               ))}
             </tbody>
