@@ -5,6 +5,9 @@ import type {
   UserFilters,
 } from "../types/user-admin.types";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "/api";
+
 function mapBackendUser(u: any): UserAdminView {
   return {
     id: String(u.id ?? ""),
@@ -42,14 +45,14 @@ export const usersService = {
   async getUsers(filters: UserFilters): Promise<UserAdminView[]> {
     const token = getTokenOrThrow();
 
-    const res = await fetch("/identity/api/users/search", {
-    method: "POST",
-    headers: buildHeaders(token),
-    body: JSON.stringify({
-    filter: [],
-    query: filters.search?.trim() ?? "",
-    page: 0,
-    pageSize: 20,
+    const res = await fetch(`${API_BASE_URL}/users/search`, {
+      method: "POST",
+      headers: buildHeaders(token),
+      body: JSON.stringify({
+        filter: [],
+        query: filters.search?.trim() ?? "",
+        page: 0,
+        pageSize: 20,
       }),
     });
 
@@ -58,15 +61,24 @@ export const usersService = {
     }
 
     const data = await res.json();
-    const users = data.items ?? data.data ?? data.content ?? [];
 
-    return Array.isArray(users) ? users.map(mapBackendUser) : [];
+    const users =
+      data.items ??
+      data.data?.items ??
+      data.data?.content ??
+      data.content ??
+      data.data ??
+      [];
+
+    return Array.isArray(users)
+      ? users.map(mapBackendUser)
+      : [];
   },
 
   async getUserById(id: string): Promise<UserAdminView | null> {
     const token = getTokenOrThrow();
 
-    const res = await fetch(`/identity/api/users/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/users/${id}`, {
       method: "GET",
       headers: buildHeaders(token),
     });
@@ -90,7 +102,7 @@ export const usersService = {
   ): Promise<UserAdminView> {
     const token = getTokenOrThrow();
 
-    const res = await fetch(`/identity/api/users/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/users/${id}`, {
       method: "PATCH",
       headers: buildHeaders(token),
       body: JSON.stringify({
@@ -118,7 +130,7 @@ export const usersService = {
   ): Promise<UserAdminView> {
     const token = getTokenOrThrow();
 
-    const res = await fetch(`/identity/api/users/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/users/${id}`, {
       method: "PATCH",
       headers: buildHeaders(token),
       body: JSON.stringify({
