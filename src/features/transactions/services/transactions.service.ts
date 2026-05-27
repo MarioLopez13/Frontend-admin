@@ -43,7 +43,7 @@ function mapBackendTransaction(t: BackendTransaction): TransactionView {
     createdAt: String(t.processedAt ?? new Date().toISOString()),
     updatedAt: String(t.processedAt ?? new Date().toISOString()),
     description: `Pago realizado mediante ${method}`,
-    technicalMessage: null,
+    technicalMessage: undefined,
   };
 }
 
