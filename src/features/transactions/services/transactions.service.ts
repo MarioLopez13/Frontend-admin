@@ -94,6 +94,7 @@ async function fetchTransactions(): Promise<TransactionView[]> {
     method: "GET",
     headers: {
       Accept: "application/json",
+      "X-Client-Token": "pQfoROQs2QG0WuXwLvuCHocprzq87w774sF5XtVhuMU",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
