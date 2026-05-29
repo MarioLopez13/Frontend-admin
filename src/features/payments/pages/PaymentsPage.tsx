@@ -73,7 +73,11 @@ export default function PaymentsPage() {
         createdAt: item.processedAt ?? "",
       }));
 
-      setPayments(mapped);
+      const filtered = mapped.filter(
+        (item) => item.method === "QR" || item.method === "NFC"
+      );
+
+  setPayments(filtered);
     } catch (error) {
       console.error(error);
     }

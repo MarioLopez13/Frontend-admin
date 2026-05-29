@@ -5,27 +5,20 @@ import path from "node:path";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
+
   server: {
     proxy: {
-      "/api/auth": {
-        target: "http://localhost:9909",
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy) => {
-          proxy.on("proxyReq", (proxyReq) => {
-            proxyReq.removeHeader("origin");
-          });
-        },
-      },
-      "/identity": {
+      "/api": {
         target: "http://localhost:8080",
         changeOrigin: true,
         secure: false,
+
         configure: (proxy) => {
           proxy.on("proxyReq", (proxyReq) => {
             proxyReq.removeHeader("origin");

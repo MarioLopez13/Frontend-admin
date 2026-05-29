@@ -85,7 +85,18 @@ function matchesSearch(transaction: TransactionView, search: string) {
 }
 
 async function fetchTransactions(): Promise<TransactionView[]> {
-  const res = await fetch(`${API_BASE_URL}/mobile-payments`);
+  const token =
+    localStorage.getItem("accessToken") ??
+    localStorage.getItem("token") ??
+    localStorage.getItem("authToken");
+
+  const res = await fetch(`${API_BASE_URL}/mobile-payments`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
 
   if (!res.ok) {
     throw new Error("Error al obtener transacciones del backend.");

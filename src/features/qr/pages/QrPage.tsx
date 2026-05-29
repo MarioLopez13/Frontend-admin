@@ -37,6 +37,9 @@ export default function QrPage() {
       const unitsMap = new Map<string, QrUnitView>();
 
       items.forEach((item: any) => {
+        if (item.method !== "QR") {
+          return;
+        }
         const busCode = item.busCode ?? "BUS-DEMO";
         const routeName = item.routeName ?? "Ruta demo";
         const amount = Number(item.amount ?? 0.35);

@@ -2,35 +2,26 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+
 export default defineConfig({
-    plugins: [react(), tailwindcss()],
-    resolve: {
-        alias: {
-            "@": path.resolve(__dirname, "./src"),
-        },
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
     },
-    server: {
-        proxy: {
-            "/api/auth": {
-                target: "http://localhost:9909",
-                changeOrigin: true,
-                secure: false,
-                configure: function (proxy) {
-                    proxy.on("proxyReq", function (proxyReq) {
-                        proxyReq.removeHeader("origin");
-                    });
-                },
-            },
-            "/identity": {
-                target: "http://localhost:8080",
-                changeOrigin: true,
-                secure: false,
-                configure: function (proxy) {
-                    proxy.on("proxyReq", function (proxyReq) {
-                        proxyReq.removeHeader("origin");
-                    });
-                },
-            },
+  },
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+        secure: false,
+        configure: function (proxy) {
+          proxy.on("proxyReq", function (proxyReq) {
+            proxyReq.removeHeader("origin");
+          });
         },
+      },
     },
+  },
 });
