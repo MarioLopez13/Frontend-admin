@@ -29,40 +29,60 @@ export default function QrPage() {
   }, []);
 
   async function loadUnitsFromTransactions() {
-    try {
-      const response = await fetch(`${API_BASE_URL}/mobile-payments`);
-      const data = await response.json();
-      const items = data.items ?? data.data ?? [];
+  try {
+    const token =
+      localStorage.getItem("accessToken") ??
+      localStorage.getItem("token") ??
+      localStorage.getItem("authToken");
 
-      const unitsMap = new Map<string, QrUnitView>();
+    const response = await fetch(`${API_BASE_URL}/mobile-payments`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Client-Token":
+          "pQfoROQs2QG0WuXwLvuCHocprzq87w774sF5XtVhuMU",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
 
-      items.forEach((item: any) => {
-        if (item.method !== "QR") {
-          return;
-        }
-        const busCode = item.busCode ?? "BUS-DEMO";
-        const routeName = item.routeName ?? "Ruta demo";
-        const amount = Number(item.amount ?? 0.35);
-
-        if (!unitsMap.has(busCode)) {
-          unitsMap.set(busCode, {
-            id: busCode,
-            code: busCode,
-            busLabel: `Unidad ${busCode}`,
-            routeName,
-            driverName: "Conductor asignado",
-            amount,
-            active: true,
-          });
-        }
-      });
-
-      setUnits(Array.from(unitsMap.values()));
-    } catch (error) {
-      console.error(error);
-      setUnits([]);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
+
+    const data = await response.json();
+    const items = data.items ?? data.data ?? [];
+
+    const unitsMap = new Map<string, QrUnitView>();
+
+    items.forEach((item: any) => {
+      if (item.method !== "QR") {
+        return;
+      }
+
+      const busCode = item.busCode ?? "BUS-DEMO";
+      const routeName = item.routeName ?? "Ruta demo";
+      const amount = Number(item.amount ?? 0.35);
+
+      if (!unitsMap.has(busCode)) {
+        unitsMap.set(busCode, {
+          id: busCode,
+          code: busCode,
+          busLabel: `Unidad ${busCode}`,
+          routeName,
+          driverName: "Conductor asignado",
+          amount,
+          active: true,
+        });
+      }
+    });
+
+    setUnits(Array.from(unitsMap.values()));
+  } catch (error) {
+    console.error(error);
+    setUnits([]);
   }
+}
 
   const activeUnits = units.filter((unit) => unit.active).length;
   const inactiveUnits = units.filter((unit) => !unit.active).length;

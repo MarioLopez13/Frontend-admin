@@ -55,33 +55,51 @@ export default function PaymentsPage() {
   }, []);
 
   async function loadPayments() {
-    try {
-      const response = await fetch(`${API_BASE_URL}/mobile-payments`);
+  try {
+    const token =
+      localStorage.getItem("accessToken") ??
+      localStorage.getItem("token") ??
+      localStorage.getItem("authToken");
 
-      const data = await response.json();
+    const response = await fetch(`${API_BASE_URL}/mobile-payments`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Client-Token":
+          "pQfoROQs2QG0WuXwLvuCHocprzq87w774sF5XtVhuMU",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
 
-      const items = data.items ?? data.data ?? [];
-
-      const mapped: PaymentView[] = items.map((item: any) => ({
-        id: item.id ?? item.transactionId ?? "",
-        busCode: item.busCode ?? "BUS-DEMO",
-        routeName: item.routeName ?? "Ruta demo",
-        method: item.method ?? "QR",
-        amount: Number(item.amount ?? 0),
-        status:
-          item.status === "Completado" ? "APPROVED" : "PENDING",
-        createdAt: item.processedAt ?? "",
-      }));
-
-      const filtered = mapped.filter(
-        (item) => item.method === "QR" || item.method === "NFC"
-      );
-
-  setPayments(filtered);
-    } catch (error) {
-      console.error(error);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
+
+    const data = await response.json();
+
+    const items = data.items ?? data.data ?? [];
+
+    const mapped: PaymentView[] = items.map((item: any) => ({
+      id: item.id ?? item.transactionId ?? "",
+      busCode: item.busCode ?? "BUS-DEMO",
+      routeName: item.routeName ?? "Ruta demo",
+      method: item.method ?? "QR",
+      amount: Number(item.amount ?? 0),
+      status:
+        item.status === "Completado" ? "APPROVED" : "PENDING",
+      createdAt: item.processedAt ?? "",
+    }));
+
+    const filtered = mapped.filter(
+      (item) => item.method === "QR" || item.method === "NFC"
+    );
+
+    setPayments(filtered);
+  } catch (error) {
+    console.error(error);
   }
+}
 
   const approved = payments.filter(
     (payment) => payment.status === "APPROVED"
