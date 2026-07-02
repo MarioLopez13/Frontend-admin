@@ -25,7 +25,6 @@ export const authService = {
       password: payload.password,
     };
 
-    // Aunque el archivo se llame mockLogin, ya lo adaptamos para usar el backend real
     const session = await mockLogin(normalizedPayload);
 
     authStorage.setSession(session);
@@ -51,8 +50,6 @@ export const authService = {
     const session = this.getCurrentSession();
     if (!session) return null;
 
-    // Por ahora usamos el usuario guardado en sesión
-    // y no llamamos /auth/me porque ese flujo aún no está adaptado
     return session.user;
   },
 };

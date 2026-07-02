@@ -89,8 +89,7 @@ export default function LoginForm() {
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-        Mock actual: si el correo contiene <span className="font-semibold">admin</span>,
-        entra como administrador. Si no, entra como operador.
+        Accede con tus credenciales administrativas de SmartPayUT.
       </div>
 
       {generalError && (
