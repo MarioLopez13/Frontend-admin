@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { transactionsService } from "../services/transactions.service";
+import { exportCsv } from "@/shared/utils/exportCsv";
 import type {
   TransactionFilters,
   TransactionStatus,
@@ -137,6 +138,25 @@ export default function TransactionsPage() {
     setFilters(initialFilters);
   };
 
+    const handleExportTransactions = () => {
+    exportCsv(
+      "smartpayut_transacciones",
+      transactions.map((transaction) => ({
+        Referencia: transaction.reference,
+        Usuario: transaction.userName,
+        Correo: transaction.userEmail,
+        Bus: transaction.busLabel,
+        Ruta: transaction.routeName,
+        Método: transaction.method,
+        Estado: getStatusLabel(transaction.status),
+        Monto: transaction.amount.toFixed(2),
+        Fecha: formatDate(transaction.createdAt),
+        Descripción: transaction.description,
+      })),
+      "No existen transacciones para exportar."
+    );
+  };
+
   return (
     <section className="space-y-6">
       <div className="overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-950 via-indigo-900 to-blue-800 p-6 text-white shadow-sm">
@@ -160,6 +180,12 @@ export default function TransactionsPage() {
               {formatCurrency(summary.approvedAmount)}
             </p>
           </div>
+          <button
+              onClick={handleExportTransactions}
+              className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-indigo-900 hover:bg-indigo-50"
+            >
+              Exportar CSV
+            </button>
         </div>
       </div>
 

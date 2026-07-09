@@ -1,11 +1,14 @@
+import { env } from "@/app/config/env";
+import { authStorage } from "@/core/auth/auth.storage";
 import type {
   TransactionFilters,
   TransactionSummary,
   TransactionView,
 } from "../types/transaction.types";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "/api";
+const API_BASE_URL = env.apiBaseUrl.replace(/\/$/, "");
+
+type TransactionStatusView = "APPROVED" | "PENDING" | "FAILED" | "CANCELLED";
 
 type BackendTransaction = {
   id?: string;
@@ -14,6 +17,11 @@ type BackendTransaction = {
   status?: string;
   processedAt?: string;
   userId?: string;
+  userName?: string;
+  fullName?: string;
+  userFullName?: string;
+  email?: string;
+  userEmail?: string;
   busCode?: string;
   routeName?: string;
   amount?: number;
@@ -25,6 +33,88 @@ function normalize(value: string) {
   return value.trim().toLowerCase();
 }
 
+function normalizeStatus(status?: string): TransactionStatusView {
+  const value = normalize(status ?? "");
+
+  if (
+    value === "completado" ||
+    value === "completed" ||
+    value === "approved" ||
+    value === "aprobado" ||
+    value === "aprobada"
+  ) {
+    return "APPROVED";
+  }
+
+  if (
+    value === "fallido" ||
+    value === "fallida" ||
+    value === "failed" ||
+    value === "error"
+  ) {
+    return "FAILED";
+  }
+
+  if (
+    value === "cancelado" ||
+    value === "cancelada" ||
+    value === "cancelled" ||
+    value === "canceled"
+  ) {
+    return "CANCELLED";
+  }
+
+  return "PENDING";
+}
+
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
+function resolveUserName(transaction: BackendTransaction) {
+  const userId = String(transaction.userId ?? "").trim();
+  const sessionUser = authStorage.getSession()?.user;
+
+  const candidates = [
+    transaction.userName,
+    transaction.userFullName,
+    transaction.fullName,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate?.trim() && !looksLikeUuid(candidate.trim())) {
+      return candidate.trim();
+    }
+  }
+
+  if (sessionUser?.id && userId && sessionUser.id === userId) {
+    return sessionUser.fullName || "Admin SmartPayUT";
+  }
+
+  return "Usuario SmartPayUT";
+}
+
+function resolveUserEmail(transaction: BackendTransaction) {
+  const userId = String(transaction.userId ?? "").trim();
+  const sessionUser = authStorage.getSession()?.user;
+
+  const candidates = [transaction.userEmail, transaction.email];
+
+  for (const candidate of candidates) {
+    if (candidate?.trim() && candidate.includes("@")) {
+      return candidate.trim();
+    }
+  }
+
+  if (sessionUser?.id && userId && sessionUser.id === userId) {
+    return sessionUser.email || "admin@smartpayut.com";
+  }
+
+  return "Cuenta registrada";
+}
+
 function mapBackendTransaction(t: BackendTransaction): TransactionView {
   const id = String(t.id ?? t.transactionId ?? "");
   const method = (t.method ?? "QR").toUpperCase() as "QR" | "NFC";
@@ -32,22 +122,25 @@ function mapBackendTransaction(t: BackendTransaction): TransactionView {
   return {
     id,
     reference: id,
-    userName: String(t.userId ?? "Usuario demo"),
-    userEmail: `${String(t.userId ?? "demo-user")}@smartpayut.local`,
+    userName: resolveUserName(t),
+    userEmail: resolveUserEmail(t),
     method,
-    status: t.status === "Completado" ? "APPROVED" : "PENDING",
+    status: normalizeStatus(t.status),
     amount: Number(t.amount ?? 0),
-    busCode: String(t.busCode ?? "BUS-DEMO"),
-    busLabel: String(t.busCode ?? "BUS-DEMO"),
-    routeName: String(t.routeName ?? "Ruta demo"),
+    busCode: String(t.busCode ?? "Sin unidad"),
+    busLabel: String(t.busCode ?? "Sin unidad"),
+    routeName: String(t.routeName ?? "Sin ruta"),
     createdAt: String(t.processedAt ?? new Date().toISOString()),
     updatedAt: String(t.processedAt ?? new Date().toISOString()),
-    description: `Pago realizado mediante ${method}`,
+    description: `Pago registrado mediante ${method}`,
     technicalMessage: undefined,
   };
 }
 
-function matchesDateRange(transaction: TransactionView, filters: TransactionFilters) {
+function matchesDateRange(
+  transaction: TransactionView,
+  filters: TransactionFilters
+) {
   const transactionDate = transaction.createdAt.slice(0, 10);
 
   if (filters.dateFrom && transactionDate < filters.dateFrom) {
@@ -100,7 +193,7 @@ async function fetchTransactions(): Promise<TransactionView[]> {
   });
 
   if (!res.ok) {
-    throw new Error("Error al obtener transacciones del backend.");
+    throw new Error("No se pudieron obtener las transacciones del servicio.");
   }
 
   const data = await res.json();
@@ -110,13 +203,13 @@ async function fetchTransactions(): Promise<TransactionView[]> {
     return [];
   }
 
-  return items.map((item) =>
-    mapBackendTransaction(item as BackendTransaction)
-  );
+  return items.map((item) => mapBackendTransaction(item as BackendTransaction));
 }
 
 export const transactionsService = {
-  async getTransactions(filters: TransactionFilters): Promise<TransactionView[]> {
+  async getTransactions(
+    filters: TransactionFilters
+  ): Promise<TransactionView[]> {
     const transactions = await fetchTransactions();
 
     return transactions

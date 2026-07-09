@@ -7,7 +7,7 @@ import type {
 } from "@/core/auth/auth.types";
 
 type BackendAuthResponse = {
-  access_token: string;
+  access_token?: string;
   refresh_token?: string;
   token_type?: string;
   expires_in?: number;
@@ -84,10 +84,106 @@ function inferFullName(email: string, token: string): string {
 
 function inferUserId(token: string): string {
   const jwt = parseJwt(token);
-  return jwt?.sub ?? "temp-user";
+  return jwt?.sub ?? "admin-user";
 }
 
-export async function mockLogin({
+function cleanTechnicalText(value: string) {
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/["{}[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractBackendMessage(payload: unknown) {
+  if (!payload) return "";
+
+  if (typeof payload === "string") {
+    return cleanTechnicalText(payload);
+  }
+
+  if (typeof payload === "object" && payload !== null) {
+    const record = payload as Record<string, unknown>;
+
+    const candidates = [
+      record.message,
+      record.errorMessage,
+      record.error_description,
+      record.errorDescription,
+      record.detail,
+      record.error,
+      record.title,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return cleanTechnicalText(candidate);
+      }
+    }
+  }
+
+  return "";
+}
+
+function getFriendlyLoginMessage(status?: number, payload?: unknown) {
+  const rawMessage = extractBackendMessage(payload);
+  const message = rawMessage.toLowerCase();
+
+  const isInvalidCredentials =
+    status === 401 ||
+    message.includes("invalid_grant") ||
+    message.includes("invalid user credentials") ||
+    message.includes("bad credentials") ||
+    message.includes("unauthorized") ||
+    message.includes("credenciales") ||
+    message.includes("contraseña");
+
+  if (isInvalidCredentials) {
+    return "Correo o contraseña incorrectos.";
+  }
+
+  if (status === 400) {
+    return "La solicitud enviada no es válida. Revisa los datos ingresados.";
+  }
+
+  if (status === 403) {
+    return "No tienes permisos para acceder al panel administrativo.";
+  }
+
+  if (status === 404) {
+    return "No se encontró el servicio de autenticación.";
+  }
+
+  if (status && status >= 500) {
+    return "Ocurrió un problema en el servidor. Intenta nuevamente.";
+  }
+
+  if (
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("network error")
+  ) {
+    return "No se pudo conectar con el servicio. Verifica tu conexión e intenta nuevamente.";
+  }
+
+  return rawMessage || "No se pudo iniciar sesión. Intenta nuevamente.";
+}
+
+async function parseResponseSafely(response: Response): Promise<unknown> {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+async function authenticateAdmin({
   email,
   password,
 }: LoginRequest): Promise<LoginResponse> {
@@ -101,42 +197,67 @@ export async function mockLogin({
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  const res = await fetch(`${env.apiBaseUrl}${endpoints.auth.login}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      username: normalizedEmail,
-      password,
-    }),
-  });
+  try {
+    const res = await fetch(`${env.apiBaseUrl}${endpoints.auth.login}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: normalizedEmail,
+        password,
+      }),
+    });
 
-  const data: BackendAuthResponse | { message?: string; error?: string } =
-    await res.json();
+    const payload = await parseResponseSafely(res);
 
-  if (!res.ok || !("access_token" in data) || !data.access_token) {
-    throw new Error(
-      ("message" in data && data.message) ||
-        ("error" in data && data.error) ||
-        "Credenciales inválidas"
-    );
+    if (!res.ok) {
+      throw new Error(getFriendlyLoginMessage(res.status, payload));
+    }
+
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("access_token" in payload)
+    ) {
+      throw new Error(
+        "No se recibió una sesión válida. Intenta nuevamente."
+      );
+    }
+
+    const data = payload as BackendAuthResponse;
+
+    if (!data.access_token) {
+      throw new Error(
+        "No se recibió una sesión válida. Intenta nuevamente."
+      );
+    }
+
+    localStorage.setItem("token", data.access_token);
+    localStorage.setItem("accessToken", data.access_token);
+
+    if (data.refresh_token) {
+      localStorage.setItem("refreshToken", data.refresh_token);
+    }
+
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token ?? "",
+      user: {
+        id: inferUserId(data.access_token),
+        fullName: inferFullName(normalizedEmail, data.access_token),
+        email: normalizedEmail,
+        role: inferRole(normalizedEmail, data.access_token),
+      },
+    };
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(getFriendlyLoginMessage(undefined, error.message));
+    }
+
+    throw new Error("No se pudo iniciar sesión. Intenta nuevamente.");
   }
-
-  localStorage.setItem("token", data.access_token);
-
-  if (data.refresh_token) {
-    localStorage.setItem("refreshToken", data.refresh_token);
-  }
-
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token ?? "",
-    user: {
-      id: inferUserId(data.access_token),
-      fullName: inferFullName(normalizedEmail, data.access_token),
-      email: normalizedEmail,
-      role: inferRole(normalizedEmail, data.access_token),
-    },
-  };
 }
+
+export const login = authenticateAdmin;
+export const mockLogin = authenticateAdmin;

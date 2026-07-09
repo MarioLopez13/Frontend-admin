@@ -3,6 +3,49 @@ import { useNavigate } from "react-router-dom";
 import { routes } from "@/app/config/routes";
 import { useAuthStore } from "@/store/auth/auth.store";
 
+function getFriendlyLoginError(error: unknown) {
+  const rawMessage =
+    error instanceof Error ? error.message : String(error ?? "");
+
+  const message = rawMessage.toLowerCase();
+
+  if (
+    message.includes("json.parse") ||
+    message.includes("unexpected character") ||
+    message.includes("<!doctype") ||
+    message.includes("<html") ||
+    message.includes("not valid json")
+  ) {
+    return "No se pudo procesar la respuesta del servicio. Intenta nuevamente.";
+  }
+
+  if (
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("network error") ||
+    message.includes("service unavailable") ||
+    message.includes("servicio")
+  ) {
+    return "No se pudo conectar con el servicio. Verifica tu conexión e intenta nuevamente.";
+  }
+
+  if (
+    message.includes("401") ||
+    message.includes("unauthorized") ||
+    message.includes("invalid") ||
+    message.includes("credenciales") ||
+    message.includes("contraseña")
+  ) {
+    return "Correo o contraseña incorrectos.";
+  }
+
+  if (message.includes("500") || message.includes("servidor")) {
+    return "Ocurrió un problema en el servidor. Intenta nuevamente.";
+  }
+
+  return rawMessage || "No se pudo iniciar sesión. Intenta nuevamente.";
+}
+
 export default function LoginForm() {
   const login = useAuthStore((state) => state.login);
   const navigate = useNavigate();
@@ -44,11 +87,7 @@ export default function LoginForm() {
 
       navigate(routes.dashboard, { replace: true });
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No se pudo iniciar sesión.";
-      setGeneralError(message);
+      setGeneralError(getFriendlyLoginError(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -65,7 +104,7 @@ export default function LoginForm() {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-blue-500"
-          placeholder="admin@kynsoft.com"
+          placeholder="admin@smartpayut.com"
         />
         {fieldErrors.email && (
           <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>
@@ -94,7 +133,8 @@ export default function LoginForm() {
 
       {generalError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {generalError}
+          <p className="font-semibold">No se pudo iniciar sesión</p>
+          <p className="mt-1 text-xs leading-5">{generalError}</p>
         </div>
       )}
 

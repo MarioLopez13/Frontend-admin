@@ -32,7 +32,7 @@ export default function LoginPage() {
         <div className="mb-8">
           <p className="text-sm font-medium text-blue-600">KynSoft</p>
           <h1 className="mt-2 text-2xl font-bold text-slate-900">
-            SmartPayout Admin
+            SmartPayUT Admin
           </h1>
           <p className="mt-2 text-sm text-slate-500">
             Ingresa con tus credenciales para acceder al panel administrativo.

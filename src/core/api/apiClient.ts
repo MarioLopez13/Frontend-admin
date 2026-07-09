@@ -153,12 +153,17 @@ function getFriendlyErrorMessage(payload: unknown, status: number): string {
 async function parseResponsePayload(response: Response): Promise<unknown> {
   const text = await response.text();
 
-  if (!text.trim()) return null;
+  if (!text.trim()) {
+    return null;
+  }
 
   try {
     return JSON.parse(text);
   } catch {
-    return text;
+    return {
+      message: "Respuesta no válida del servicio.",
+      raw: text.slice(0, 160),
+    };
   }
 }
 
@@ -170,10 +175,13 @@ export async function apiClient<T>(
   const accessToken = token ?? session?.accessToken;
 
   try {
-    const response = await fetch(`${env.apiBaseUrl}${path}`, {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+    const response = await fetch(`${env.apiBaseUrl}${normalizedPath}`, {
       method,
       headers: {
         "Content-Type": "application/json",
+        "X-Client-Token": "pQfoROQs2QG0WuXwLvuCHocprzq87w774sF5XtVhuMU",
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...headers,
       },
@@ -199,9 +207,9 @@ export async function apiClient<T>(
     }
 
     throw new ApiError(
-      "No se pudo conectar con el backend. Verifica que el servicio esté encendido.",
+      "No se pudo conectar con el servicio. Verifica tu conexión e intenta nuevamente.",
       {
-        title: "Backend no disponible",
+        title: "Servicio no disponible",
       }
     );
   }

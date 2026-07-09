@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { exportCsv } from "@/shared/utils/exportCsv";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "/api";
+import { env } from "@/app/config/env";
+
+const API_BASE_URL = env.apiBaseUrl;
 
 type PaymentView = {
   id: string;
@@ -82,8 +84,8 @@ export default function PaymentsPage() {
 
     const mapped: PaymentView[] = items.map((item: any) => ({
       id: item.id ?? item.transactionId ?? "",
-      busCode: item.busCode ?? "BUS-DEMO",
-      routeName: item.routeName ?? "Ruta demo",
+      busCode: item.busCode ?? "Sin unidad",
+      routeName: item.routeName ?? "Sin ruta",
       method: item.method ?? "QR",
       amount: Number(item.amount ?? 0),
       status:
@@ -100,6 +102,24 @@ export default function PaymentsPage() {
     console.error(error);
   }
 }
+
+  const handleExportPayments = () => {
+    exportCsv(
+      "smartpayut_pagos",
+      payments.map((payment) => ({
+        ID: payment.id,
+        Unidad: payment.busCode,
+        Ruta: payment.routeName,
+        Método: payment.method,
+        Monto: payment.amount.toFixed(2),
+        Estado: getStatusLabel(payment.status),
+        Fecha: payment.createdAt
+          ? new Date(payment.createdAt).toLocaleString("es-EC")
+          : "-",
+      })),
+      "No existen pagos para exportar."
+    );
+  };
 
   const approved = payments.filter(
     (payment) => payment.status === "APPROVED"
@@ -119,11 +139,20 @@ export default function PaymentsPage() {
 
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Pagos</h1>
-        <p className="text-sm text-slate-500">
-          Monitoreo administrativo de pagos registrados en el sistema.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Pagos</h1>
+          <p className="text-sm text-slate-500">
+            Monitoreo administrativo de pagos registrados en el sistema.
+          </p>
+        </div>
+
+        <button
+          onClick={handleExportPayments}
+          className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-800"
+        >
+          Exportar CSV
+        </button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">

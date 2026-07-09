@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { usersService } from "../services/users.service";
+import { exportCsv } from "@/shared/utils/exportCsv";
 import type { UserAdminView, UserFilters } from "../types/user-admin.types";
 import UserFiltersComponent from "../components/UserFilters";
 import UsersTable from "../components/UsersTable";
@@ -78,6 +79,20 @@ export default function UsersPage() {
     setFilters(nextFilters);
   };
 
+  const handleExportUsers = () => {
+    exportCsv(
+      "smartpayut_usuarios",
+      users.map((user) => ({
+        Nombre: user.fullName,
+        Correo: user.email,
+        Estado: user.status === "active" ? "Activo" : "Inactivo",
+        Rol: user.role,
+        "Fecha de creación": user.createdAt,
+      })),
+      "No existen usuarios para exportar."
+    );
+  };
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -90,12 +105,21 @@ export default function UsersPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => void loadUsers(filters)}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-        >
-          Recargar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleExportUsers}
+            className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-800"
+          >
+            Exportar CSV
+          </button>
+
+          <button
+            onClick={() => void loadUsers(filters)}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Recargar
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
