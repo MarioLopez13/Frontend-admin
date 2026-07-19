@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { usersService } from "../services/users.service";
 import { exportCsv } from "@/shared/utils/exportCsv";
-import type { UserAdminView, UserFilters } from "../types/user-admin.types";
+import type {
+  UserAdminView,
+  UserFilters,
+} from "../types/user-admin.types";
 import UserFiltersComponent from "../components/UserFilters";
 import UsersTable from "../components/UsersTable";
 
@@ -21,11 +24,15 @@ export default function UsersPage() {
     try {
       setIsLoading(true);
       setError("");
+
       const result = await usersService.getUsers(nextFilters);
       setUsers(result);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "No se pudo cargar usuarios.";
+        err instanceof Error
+          ? err.message
+          : "No se pudo cargar usuarios.";
+
       setError(message);
     } finally {
       setIsLoading(false);
@@ -37,8 +44,13 @@ export default function UsersPage() {
   }, [filters]);
 
   const counters = useMemo(() => {
-    const active = users.filter((user) => user.status === "active").length;
-    const inactive = users.filter((user) => user.status === "inactive").length;
+    const active = users.filter(
+      (user) => user.status === "active"
+    ).length;
+
+    const inactive = users.filter(
+      (user) => user.status === "inactive"
+    ).length;
 
     return {
       total: users.length,
@@ -48,21 +60,54 @@ export default function UsersPage() {
   }, [users]);
 
   const handleToggleStatus = async (user: UserAdminView) => {
-    const nextStatus = user.status === "active" ? "inactive" : "active";
+    const nextStatus =
+      user.status === "active" ? "inactive" : "active";
 
     try {
       setError("");
       setFeedback("");
+      setIsLoading(true);
 
-      const updatedUser = await usersService.updateUserStatus(user.id, {
+      // Solicita el cambio al backend.
+      await usersService.updateUserStatus(user.id, {
         status: nextStatus,
       });
 
-      await loadUsers(filters);
+      // Vuelve a consultar los datos reales del backend.
+      const refreshedUsers =
+        await usersService.getUsers(filters);
+
+      setUsers(refreshedUsers);
+
+      const refreshedUser = refreshedUsers.find(
+        (currentUser) => currentUser.id === user.id
+      );
+
+      if (!refreshedUser) {
+        setError(
+          "No fue posible verificar el estado actualizado del usuario."
+        );
+        return;
+      }
+
+      // El backend respondió correctamente, pero no permitió cambiarlo.
+      if (refreshedUser.status !== nextStatus) {
+        const attemptedAction =
+          nextStatus === "inactive" ? "desactivar" : "activar";
+
+        setError(
+          `No es posible ${attemptedAction} a ${user.fullName}. ` +
+            "Este usuario está protegido por el sistema."
+        );
+
+        return;
+      }
 
       setFeedback(
-        `Estado actualizado: ${updatedUser.fullName} ahora está ${
-          updatedUser.status === "active" ? "activo" : "inactivo"
+        `Estado actualizado: ${refreshedUser.fullName} ahora está ${
+          refreshedUser.status === "active"
+            ? "activo"
+            : "inactivo"
         }.`
       );
     } catch (err) {
@@ -70,12 +115,18 @@ export default function UsersPage() {
         err instanceof Error
           ? err.message
           : "No se pudo actualizar el estado del usuario.";
+
       setError(message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleFiltersChange = (nextFilters: UserFilters) => {
+  const handleFiltersChange = (
+    nextFilters: UserFilters
+  ) => {
     setFeedback("");
+    setError("");
     setFilters(nextFilters);
   };
 
@@ -85,7 +136,10 @@ export default function UsersPage() {
       users.map((user) => ({
         Nombre: user.fullName,
         Correo: user.email,
-        Estado: user.status === "active" ? "Activo" : "Inactivo",
+        Estado:
+          user.status === "active"
+            ? "Activo"
+            : "Inactivo",
         Rol: user.role,
         "Fecha de creación": user.createdAt,
       })),
@@ -100,8 +154,10 @@ export default function UsersPage() {
           <h1 className="text-2xl font-bold text-slate-900">
             Gestión de usuarios
           </h1>
+
           <p className="text-sm text-slate-500">
-            Consulta, filtra, edita y activa/desactiva usuarios finales.
+            Consulta, filtra, edita y activa/desactiva
+            usuarios finales.
           </p>
         </div>
 
@@ -124,21 +180,30 @@ export default function UsersPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <p className="text-sm text-slate-500">Total usuarios</p>
+          <p className="text-sm text-slate-500">
+            Total usuarios
+          </p>
+
           <p className="mt-2 text-3xl font-bold text-slate-900">
             {counters.total}
           </p>
         </article>
 
         <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <p className="text-sm text-slate-500">Activos</p>
+          <p className="text-sm text-slate-500">
+            Activos
+          </p>
+
           <p className="mt-2 text-3xl font-bold text-green-700">
             {counters.active}
           </p>
         </article>
 
         <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <p className="text-sm text-slate-500">Inactivos</p>
+          <p className="text-sm text-slate-500">
+            Inactivos
+          </p>
+
           <p className="mt-2 text-3xl font-bold text-slate-600">
             {counters.inactive}
           </p>
@@ -146,7 +211,10 @@ export default function UsersPage() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <UserFiltersComponent value={filters} onChange={handleFiltersChange} />
+        <UserFiltersComponent
+          value={filters}
+          onChange={handleFiltersChange}
+        />
       </div>
 
       {feedback && (
@@ -166,7 +234,10 @@ export default function UsersPage() {
           Cargando usuarios...
         </div>
       ) : (
-        <UsersTable users={users} onToggleStatus={handleToggleStatus} />
+        <UsersTable
+          users={users}
+          onToggleStatus={handleToggleStatus}
+        />
       )}
     </section>
   );

@@ -21,21 +21,18 @@ import {
 
 const CHART_COLORS = ["#16a34a", "#dc2626", "#94a3b8"];
 
-const operationsByMethodData = [
-  { method: "QR", operations: 18 },
-  { method: "NFC", operations: 11 },
-  { method: "Recarga", operations: 7 },
-];
-
-const weeklyOperationsData = [
-  { day: "Lun", operations: 4 },
-  { day: "Mar", operations: 6 },
-  { day: "Mié", operations: 5 },
-  { day: "Jue", operations: 8 },
-  { day: "Vie", operations: 9 },
-  { day: "Sáb", operations: 3 },
-  { day: "Dom", operations: 1 },
-];
+const EMPTY_SUMMARY: DashboardSummary = {
+  totalUsers: 0,
+  activeUsers: 0,
+  inactiveUsers: 0,
+  totalTransactions: 0,
+  approvedTransactions: 0,
+  pendingTransactions: 0,
+  failedTransactions: 0,
+  approvedAmount: 0,
+  operationsByMethod: [],
+  weeklyOperations: [],
+};
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -47,19 +44,17 @@ export default function DashboardPage() {
       try {
         setIsLoading(true);
         setError("");
+
         const result = await dashboardService.getSummary();
         setSummary(result);
       } catch (err) {
         const message =
           err instanceof Error
             ? err.message
-            : "Error al obtener usuarios del backend.";
+            : "Error al obtener la información del dashboard.";
+
         setError(message);
-        setSummary({
-          totalUsers: 0,
-          activeUsers: 0,
-          inactiveUsers: 0,
-        });
+        setSummary(EMPTY_SUMMARY);
       } finally {
         setIsLoading(false);
       }
@@ -72,10 +67,25 @@ export default function DashboardPage() {
   const activeUsers = summary?.activeUsers ?? 0;
   const inactiveUsers = summary?.inactiveUsers ?? 0;
 
-  const hasChartData = totalUsers > 0;
+  const totalTransactions = summary?.totalTransactions ?? 0;
+  const approvedTransactions = summary?.approvedTransactions ?? 0;
+  const pendingTransactions = summary?.pendingTransactions ?? 0;
+  const failedTransactions = summary?.failedTransactions ?? 0;
+  const approvedAmount = summary?.approvedAmount ?? 0;
+
+  const operationsByMethodData = summary?.operationsByMethod ?? [];
+  const weeklyOperationsData = summary?.weeklyOperations ?? [];
+
+  const hasUserChartData = totalUsers > 0;
+  const hasOperationsData = operationsByMethodData.some(
+    (item) => item.operations > 0
+  );
+  const hasWeeklyData = weeklyOperationsData.some(
+    (item) => item.operations > 0
+  );
 
   const usersChartData = useMemo(() => {
-    if (!hasChartData) {
+    if (!hasUserChartData) {
       return [{ name: "Sin datos", value: 1 }];
     }
 
@@ -83,7 +93,7 @@ export default function DashboardPage() {
       { name: "Activos", value: activeUsers },
       { name: "Inactivos", value: inactiveUsers },
     ];
-  }, [activeUsers, inactiveUsers, hasChartData]);
+  }, [activeUsers, inactiveUsers, hasUserChartData]);
 
   const totalOperations = operationsByMethodData.reduce(
     (acc, item) => acc + item.operations,
@@ -92,20 +102,20 @@ export default function DashboardPage() {
 
   const operationalStatus = [
     {
-      label: "Autenticación activa",
-      ok: true,
-    },
-    {
-      label: "Usuarios gestionados",
+      label: "Autenticación disponible",
       ok: !error,
     },
     {
-      label: "Pagos monitoreados",
-      ok: true,
+      label: `${totalUsers} usuarios gestionados`,
+      ok: !error,
     },
     {
-      label: "Transacciones disponibles",
-      ok: true,
+      label: `${approvedTransactions} transacciones aprobadas`,
+      ok: !error,
+    },
+    {
+      label: `${pendingTransactions} pendientes y ${failedTransactions} fallidas`,
+      ok: !error,
     },
   ];
 
@@ -114,13 +124,13 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-sm text-slate-500">
-          Resumen operativo del sistema de pagos QR/NFC.
+          Resumen operativo del sistema de pagos QR y NFC.
         </p>
       </div>
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-          Error al obtener usuarios del backend.
+          {error}
         </div>
       )}
 
@@ -130,7 +140,7 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-sm text-slate-500">Total usuarios</p>
               <p className="mt-2 text-3xl font-bold text-slate-900">
@@ -151,6 +161,23 @@ export default function DashboardPage() {
                 {inactiveUsers}
               </p>
             </article>
+
+            <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-sm text-slate-500">Total transacciones</p>
+              <p className="mt-2 text-3xl font-bold text-indigo-700">
+                {totalTransactions}
+              </p>
+              <p className="mt-2 text-xs text-slate-400">
+                {approvedTransactions} aprobadas
+              </p>
+            </article>
+
+            <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-sm text-slate-500">Monto aprobado</p>
+              <p className="mt-2 text-3xl font-bold text-emerald-700">
+                ${approvedAmount.toFixed(2)}
+              </p>
+            </article>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[0.85fr_1.45fr]">
@@ -161,7 +188,7 @@ export default function DashboardPage() {
                     Estado operativo
                   </h2>
                   <p className="text-sm text-slate-500">
-                    Validación rápida de módulos principales.
+                    Validación rápida de los módulos principales.
                   </p>
                 </div>
 
@@ -204,7 +231,7 @@ export default function DashboardPage() {
                 </div>
 
                 <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                  Estadística admin
+                  Datos reales
                 </span>
               </div>
 
@@ -219,9 +246,9 @@ export default function DashboardPage() {
                       cy="50%"
                       outerRadius={95}
                       innerRadius={48}
-                      paddingAngle={hasChartData ? 4 : 0}
+                      paddingAngle={hasUserChartData ? 4 : 0}
                       label={({ name, value }) =>
-                        hasChartData ? `${name}: ${value}` : "Sin datos"
+                        hasUserChartData ? `${name}: ${value}` : "Sin datos"
                       }
                     >
                       {usersChartData.map((entry, index) => (
@@ -247,7 +274,7 @@ export default function DashboardPage() {
                     Operaciones por método
                   </h2>
                   <p className="text-sm text-slate-500">
-                    Comparación operativa entre QR, NFC y recargas.
+                    Comparación de pagos registrados mediante QR y NFC.
                   </p>
                 </div>
 
@@ -257,26 +284,32 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-4 h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={operationsByMethodData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="method" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar
-                      dataKey="operations"
-                      name="Operaciones"
-                      radius={[8, 8, 0, 0]}
-                      fill="#4f46e5"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+                {hasOperationsData ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={operationsByMethodData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="method" />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar
+                        dataKey="operations"
+                        name="Operaciones"
+                        radius={[8, 8, 0, 0]}
+                        fill="#4f46e5"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 text-sm text-slate-400">
+                    No existen operaciones registradas.
+                  </div>
+                )}
               </div>
 
               <p className="mt-2 text-xs text-slate-400">
-                Datos simulados para representar el comportamiento esperado del
-                MVP en entorno de demostración.
+                Información obtenida directamente del servicio de
+                transacciones.
               </p>
             </article>
 
@@ -287,39 +320,44 @@ export default function DashboardPage() {
                     Actividad semanal
                   </h2>
                   <p className="text-sm text-slate-500">
-                    Tendencia de operaciones registradas durante la semana.
+                    Operaciones registradas durante los últimos siete días.
                   </p>
                 </div>
 
                 <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700">
-                  Semana actual
+                  Datos reales
                 </span>
               </div>
 
               <div className="mt-4 h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={weeklyOperationsData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="day" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="operations"
-                      name="Operaciones"
-                      stroke="#0891b2"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                {hasWeeklyData ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={weeklyOperationsData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="day" />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="operations"
+                        name="Operaciones"
+                        stroke="#0891b2"
+                        strokeWidth={3}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 text-sm text-slate-400">
+                    No existen operaciones durante los últimos siete días.
+                  </div>
+                )}
               </div>
 
               <p className="mt-2 text-xs text-slate-400">
-                Datos simulados para visualizar una tendencia operativa dentro
-                del panel administrativo.
+                Tendencia calculada con las transacciones reales del sistema.
               </p>
             </article>
           </div>
