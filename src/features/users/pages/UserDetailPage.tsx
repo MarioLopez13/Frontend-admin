@@ -66,13 +66,13 @@ export default function UserDetailPage() {
 
     try {
       setError("");
-      const updated = await usersService.updateUserStatus(user.id, {
+      await usersService.updateUserStatus(user.id, {
         status: nextStatus,
       });
-      setUser(updated);
+      setUser({ ...user, status: nextStatus });
       setFeedback(
-        `Estado actualizado: ${updated.fullName} ahora está ${
-          updated.status === "active" ? "activo" : "inactivo"
+        `Estado actualizado: ${user.fullName} ahora está ${
+          nextStatus === "active" ? "activo" : "inactivo"
         }.`
       );
     } catch (err) {
