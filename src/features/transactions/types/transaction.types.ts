@@ -1,36 +1,58 @@
-export type TransactionMethod = "QR" | "NFC";
-export type TransactionStatus = "APPROVED" | "PENDING" | "FAILED" | "CANCELLED";
+export type ApiResponse<T> = {
+  success: boolean;
+  message: string;
+  data: T;
+};
 
-export interface TransactionView {
+export type AdminTransaction = {
   id: string;
-  reference: string;
-  userName: string;
-  userEmail: string;
-  method: TransactionMethod;
-  status: TransactionStatus;
+  correlationId: string | null;
+  type: string;
+  method: string | null;
+  status: string;
   amount: number;
-  busCode: string;
-  busLabel: string;
-  routeName: string;
-  createdAt: string;
-  updatedAt: string;
-  description: string;
-  technicalMessage?: string;
-}
+  occurredAt: string;
+  userId: string | null;
+  walletId: string | null;
+  busCode: string | null;
+  routeName: string | null;
+  balanceBefore: number | null;
+  balanceAfter: number | null;
+  currency: string;
+  failureReason: string | null;
+};
 
-export interface TransactionFilters {
+export type TransactionPageData = {
+  items: AdminTransaction[];
+  page: number;
+  pageSize: number;
+  totalElements: number;
+  totalPages: number;
+};
+
+export type AdminTransactionView = AdminTransaction & {
+  typeLabel: string;
+  methodLabel: string;
+  statusLabel: string;
+  userLabel: string;
+  busLabel: string;
+  routeLabel: string;
+};
+
+export type AdminTransactionPage = Omit<TransactionPageData, "items"> & {
+  items: AdminTransactionView[];
+};
+
+export type TransactionFilters = {
   search: string;
-  status: "all" | TransactionStatus;
-  method: "all" | TransactionMethod;
+  status: "all" | string;
+  method: "all" | string;
+  type: "all" | string;
   dateFrom: string;
   dateTo: string;
-}
+};
 
-export interface TransactionSummary {
-  total: number;
-  approved: number;
-  pending: number;
-  failed: number;
-  cancelled: number;
-  approvedAmount: number;
-}
+export type GetAdminTransactionsParams = {
+  page: number;
+  pageSize: number;
+};

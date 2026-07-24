@@ -1,210 +1,170 @@
+import { ApiError, apiClient } from "@/core/api/apiClient";
+import { endpoints } from "@/core/api/endpoints";
+import { authStorage } from "@/core/auth/auth.storage";
+import {
+  mapBackendUserToAdminView,
+  type BackendUser,
+  type UsersSearchResponse,
+} from "./users.adapter";
 import type {
+  CreateUserRequest,
   UpdateUserRequest,
   UpdateUserStatusRequest,
   UserAdminView,
   UserFilters,
+  UsersPageResult,
 } from "../types/user-admin.types";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ??
-  "/api";
+type ApiResponse<T> = {
+  success: boolean;
+  message: string;
+  data: T;
+};
 
-function mapBackendUser(u: any): UserAdminView {
-  return {
-    id: String(u.id ?? ""),
-    fullName:
-      [u.name, u.lastName].filter(Boolean).join(" ") ||
-      u.fullName ||
-      "Sin nombre",
-    email: u.email ?? "sin-correo@test.com",
-    role: "user",
-    status: (u.status ?? "INACTIVE").toLowerCase() as
-      | "active"
-      | "inactive",
-    createdAt:
-      u.createdAt ?? new Date().toISOString(),
-    updatedAt:
-      u.updatedAt ?? new Date().toISOString(),
-  };
-}
+function handleUsersError(error: unknown): never {
+  if (error instanceof ApiError) {
+    if (error.status === 401) {
+      authStorage.clearSession();
+      window.location.assign("/login");
+      throw new Error("La sesión expiró. Inicie sesión nuevamente.");
+    }
 
-function getTokenOrThrow() {
-  const token = localStorage.getItem("token");
+    if (error.status === 403) {
+      throw new Error("No tiene permisos para realizar esta acción.");
+    }
 
-  if (!token) {
-    throw new Error(
-      "No hay token, inicia sesión nuevamente."
-    );
+    if (error.status === 404) {
+      throw new Error("No se encontró el usuario solicitado.");
+    }
+
+    if (error.status === 409) {
+      throw new Error("Ya existe un usuario con el correo o username ingresado.");
+    }
+
+    if (error.status === 400 || error.status === 422) {
+      throw new Error("Revise los datos ingresados e intente nuevamente.");
+    }
+
+    if (error.status && error.status >= 500) {
+      throw new Error("Ocurrió un problema al procesar la solicitud.");
+    }
   }
 
-  return token;
+  throw new Error("No se pudo completar la operación de usuarios.");
 }
 
-function buildHeaders(token: string) {
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-    "X-Client-Token":
-      "pQfoROQs2QG0WuXwLvuCHocprzq87w774sF5XtVhuMU",
-  };
+async function usersRequest<T>(
+  path: string,
+  options?: Parameters<typeof apiClient<T>>[1]
+): Promise<T> {
+  try {
+    return await apiClient<T>(path, options);
+  } catch (error) {
+    return handleUsersError(error);
+  }
 }
 
 export const usersService = {
   async getUsers(
-    filters: UserFilters
-  ): Promise<UserAdminView[]> {
-    const token = getTokenOrThrow();
-
-    const res = await fetch(
-      `${API_BASE_URL}/users/search`,
+    filters: UserFilters,
+    page = 0,
+    pageSize = 20
+  ): Promise<UsersPageResult> {
+    const response = await usersRequest<UsersSearchResponse>(
+      endpoints.users.search,
       {
         method: "POST",
-        headers: buildHeaders(token),
-        body: JSON.stringify({
+        body: {
           filter: [],
-          query: filters.search?.trim() ?? "",
-          page: 0,
-          pageSize: 20,
-        }),
+          query: filters.search.trim(),
+          page,
+          pageSize,
+        },
       }
     );
 
-    if (!res.ok) {
-      throw new Error(
-        "Error al obtener usuarios del backend."
-      );
-    }
+    const mappedUsers = response.items
+      .filter((user) => user.status !== "DELETED")
+      .map(mapBackendUserToAdminView);
+    const items =
+      filters.status === "all"
+        ? mappedUsers
+        : mappedUsers.filter((user) => user.status === filters.status);
 
-    const data = await res.json();
-
-    const backendUsers =
-      data.items ??
-      data.data?.items ??
-      data.data?.content ??
-      data.content ??
-      data.data ??
-      [];
-
-    const mappedUsers = Array.isArray(backendUsers)
-      ? backendUsers.map(mapBackendUser)
-      : [];
-
-    if (filters.status === "active") {
-      return mappedUsers.filter(
-        (user) => user.status === "active"
-      );
-    }
-
-    if (filters.status === "inactive") {
-      return mappedUsers.filter(
-        (user) => user.status === "inactive"
-      );
-    }
-
-    return mappedUsers;
+    return {
+      items,
+      totalCount: response.totalCount,
+      page: response.page,
+      pageSize: response.pageSize,
+      totalPages: response.totalPages,
+    };
   },
 
-  async getUserById(
-    id: string
-  ): Promise<UserAdminView | null> {
-    const token = getTokenOrThrow();
+  async getUserById(id: string): Promise<UserAdminView> {
+    const response = await usersRequest<ApiResponse<BackendUser>>(
+      endpoints.users.detail(id)
+    );
 
-    const res = await fetch(
-      `${API_BASE_URL}/users/${id}`,
+    return mapBackendUserToAdminView(response.data);
+  },
+
+  async createUser(payload: CreateUserRequest): Promise<UserAdminView> {
+    const response = await usersRequest<ApiResponse<BackendUser>>(
+      endpoints.users.create,
       {
-        method: "GET",
-        headers: buildHeaders(token),
+        method: "POST",
+        body: {
+          userName: payload.userName.trim().toLowerCase(),
+          email: payload.email.trim().toLowerCase(),
+          name: payload.name.trim(),
+          lastName: payload.lastName.trim(),
+          password: payload.password,
+        },
       }
     );
 
-    if (!res.ok) {
-      throw new Error(
-        "No se pudo cargar el usuario."
-      );
-    }
-
-    const data = await res.json();
-
-    if (data.error) {
-      return null;
-    }
-
-    return mapBackendUser(data.data ?? data);
+    return mapBackendUserToAdminView(response.data);
   },
 
   async updateUser(
     id: string,
     payload: UpdateUserRequest
   ): Promise<UserAdminView> {
-    const token = getTokenOrThrow();
-
-    const res = await fetch(
-      `${API_BASE_URL}/users/${id}`,
+    const response = await usersRequest<ApiResponse<BackendUser>>(
+      endpoints.users.update(id),
       {
         method: "PATCH",
-        headers: buildHeaders(token),
-        body: JSON.stringify({
-          name: payload.fullName,
-          email: payload.email,
-        }),
+        body: {
+          name: payload.name.trim(),
+          lastName: payload.lastName.trim(),
+          email: payload.email.trim().toLowerCase(),
+        },
       }
     );
 
-    if (!res.ok) {
-      throw new Error(
-        "No se pudo actualizar el usuario."
-      );
-    }
-
-    const data = await res.json();
-
-    if (data.error) {
-      throw new Error(data.error);
-    }
-
-    return mapBackendUser(data.data ?? data);
+    return mapBackendUserToAdminView(response.data);
   },
 
   async updateUserStatus(
     id: string,
     payload: UpdateUserStatusRequest
-  ): Promise<void> {
-    const token = getTokenOrThrow();
-
-    const res = await fetch(
-      `${API_BASE_URL}/users/${id}`,
+  ): Promise<UserAdminView> {
+    const response = await usersRequest<ApiResponse<BackendUser>>(
+      endpoints.users.update(id),
       {
         method: "PATCH",
-        headers: buildHeaders(token),
-        body: JSON.stringify({
+        body: {
           status: payload.status.toUpperCase(),
-        }),
+        },
       }
     );
 
-    if (!res.ok) {
-      let backendMessage =
-        "No se pudo actualizar el estado del usuario.";
+    return mapBackendUserToAdminView(response.data);
+  },
 
-      try {
-        const data = await res.json();
-
-        backendMessage =
-          data.message ??
-          data.error ??
-          backendMessage;
-      } catch {
-        // La respuesta no contiene JSON.
-      }
-
-      throw new Error(backendMessage);
-    }
-
-    /*
-     * El endpoint PATCH devuelve una confirmación,
-     * pero no necesariamente devuelve el usuario
-     * completo actualizado. Por eso no se transforma
-     * su respuesta con mapBackendUser.
-     */
+  async deleteUser(id: string): Promise<void> {
+    await usersRequest<ApiResponse<null>>(endpoints.users.delete(id), {
+      method: "DELETE",
+    });
   },
 };

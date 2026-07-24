@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { usersService } from "../services/users.service";
 import { exportCsv } from "@/shared/utils/exportCsv";
+import { useAuthStore } from "@/store/auth/auth.store";
 import type {
+  CreateUserRequest,
   UserAdminView,
   UserFilters,
 } from "../types/user-admin.types";
+import UserCreateForm from "../components/UserCreateForm";
 import UserFiltersComponent from "../components/UserFilters";
 import UsersTable from "../components/UsersTable";
 
@@ -12,21 +15,35 @@ const initialFilters: UserFilters = {
   search: "",
   status: "all",
 };
+const PAGE_SIZE = 20;
 
 export default function UsersPage() {
+  const role = useAuthStore((state) => state.user?.role);
   const [filters, setFilters] = useState<UserFilters>(initialFilters);
   const [users, setUsers] = useState<UserAdminView[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const loadUsers = async (nextFilters: UserFilters) => {
+  const loadUsers = async (nextFilters: UserFilters, nextPage = page) => {
     try {
       setIsLoading(true);
       setError("");
 
-      const result = await usersService.getUsers(nextFilters);
-      setUsers(result);
+      const result = await usersService.getUsers(
+        nextFilters,
+        nextPage,
+        PAGE_SIZE
+      );
+      setUsers(result.items);
+      setTotalCount(result.totalCount);
+      setTotalPages(result.totalPages);
+      setPage(result.page);
     } catch (err) {
       const message =
         err instanceof Error
@@ -40,8 +57,8 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
-    void loadUsers(filters);
-  }, [filters]);
+    void loadUsers(filters, page);
+  }, [filters, page]);
 
   const counters = useMemo(() => {
     const active = users.filter(
@@ -53,11 +70,11 @@ export default function UsersPage() {
     ).length;
 
     return {
-      total: users.length,
+      total: totalCount,
       active,
       inactive,
     };
-  }, [users]);
+  }, [totalCount, users]);
 
   const handleToggleStatus = async (user: UserAdminView) => {
     const nextStatus =
@@ -74,12 +91,17 @@ export default function UsersPage() {
       });
 
       // Vuelve a consultar los datos reales del backend.
-      const refreshedUsers =
-        await usersService.getUsers(filters);
+      const refreshedPage = await usersService.getUsers(
+        filters,
+        page,
+        PAGE_SIZE
+      );
 
-      setUsers(refreshedUsers);
+      setUsers(refreshedPage.items);
+      setTotalCount(refreshedPage.totalCount);
+      setTotalPages(refreshedPage.totalPages);
 
-      const refreshedUser = refreshedUsers.find(
+      const refreshedUser = refreshedPage.items.find(
         (currentUser) => currentUser.id === user.id
       );
 
@@ -127,7 +149,49 @@ export default function UsersPage() {
   ) => {
     setFeedback("");
     setError("");
+    setPage(0);
     setFilters(nextFilters);
+  };
+
+  const handleCreate = async (payload: CreateUserRequest) => {
+    try {
+      setIsSubmitting(true);
+      setError("");
+      const created = await usersService.createUser(payload);
+      setFeedback(`Usuario ${created.fullName} creado correctamente.`);
+      setIsCreating(false);
+      setPage(0);
+      await loadUsers(filters, 0);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (user: UserAdminView) => {
+    const confirmed = window.confirm(
+      `¿Confirma que desea eliminar a ${user.fullName}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setIsLoading(true);
+      setError("");
+      setFeedback("");
+      await usersService.deleteUser(user.id);
+      const nextPage = users.length === 1 && page > 0 ? page - 1 : page;
+      setFeedback(`Usuario ${user.fullName} eliminado correctamente.`);
+      setPage(nextPage);
+      await loadUsers(filters, nextPage);
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "No se pudo eliminar el usuario."
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExportUsers = () => {
@@ -162,6 +226,15 @@ export default function UsersPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {role === "admin" && (
+            <button
+              onClick={() => setIsCreating((current) => !current)}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              Nuevo usuario
+            </button>
+          )}
+
           <button
             onClick={handleExportUsers}
             className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-800"
@@ -170,13 +243,21 @@ export default function UsersPage() {
           </button>
 
           <button
-            onClick={() => void loadUsers(filters)}
+            onClick={() => void loadUsers(filters, page)}
             className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
           >
             Recargar
           </button>
         </div>
       </div>
+
+      {isCreating && (
+        <UserCreateForm
+          onSubmit={handleCreate}
+          onCancel={() => setIsCreating(false)}
+          isSubmitting={isSubmitting}
+        />
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <article className="rounded-xl border border-slate-200 bg-white p-5">
@@ -237,7 +318,32 @@ export default function UsersPage() {
         <UsersTable
           users={users}
           onToggleStatus={handleToggleStatus}
+          onDelete={handleDelete}
         />
+      )}
+
+      {!isLoading && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm text-slate-500">
+            Página {page + 1} de {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <button
+              disabled={page === 0}
+              onClick={() => setPage((current) => current - 1)}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
+            >
+              Anterior
+            </button>
+            <button
+              disabled={page + 1 >= totalPages}
+              onClick={() => setPage((current) => current + 1)}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
       )}
     </section>
   );

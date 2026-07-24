@@ -1,169 +1,92 @@
-import { apiClient } from "@/core/api/apiClient";
-import { transactionsService } from "@/features/transactions/services/transactions.service";
+import { ApiError, apiClient } from "@/core/api/apiClient";
+import { endpoints } from "@/core/api/endpoints";
+import { authStorage } from "@/core/auth/auth.storage";
+import type {
+  ApiResponse,
+  DashboardOperationByMethod,
+  DashboardSummaryViewModel,
+  TransactionDashboardData,
+  UserSummaryData,
+} from "../types/dashboard.types";
 
-export type DashboardOperationByMethod = {
-  method: "QR" | "NFC";
-  operations: number;
-};
+export const DEFAULT_DASHBOARD_DAYS = 7;
 
-export type DashboardWeeklyOperation = {
-  day: string;
-  operations: number;
-};
+const METHOD_PRIORITY = ["QR", "NFC", "PLACETOPAY"] as const;
 
-export type DashboardSummary = {
-  totalUsers: number;
-  activeUsers: number;
-  inactiveUsers: number;
-  totalTransactions: number;
-  approvedTransactions: number;
-  pendingTransactions: number;
-  failedTransactions: number;
-  approvedAmount: number;
-  operationsByMethod: DashboardOperationByMethod[];
-  weeklyOperations: DashboardWeeklyOperation[];
-};
-
-type BackendUser = {
-  id?: string;
-  email?: string;
-  userName?: string;
-  name?: string;
-  lastName?: string;
-  status?: string;
-  userType?: string;
-};
-
-type BackendPaginatedResponse = {
-  data?: BackendUser[];
-  totalElements?: number;
-  totalElementsPage?: number;
-  page?: number;
-  size?: number;
-};
-
-function normalizeStatus(status?: string): "active" | "inactive" {
-  const value = status?.trim().toLowerCase() ?? "";
-
-  if (
-    value === "inactive" ||
-    value === "inactivo" ||
-    value === "disabled"
-  ) {
-    return "inactive";
-  }
-
-  if (
-    value === "active" ||
-    value === "activo" ||
-    value === "enabled"
-  ) {
-    return "active";
-  }
-
-  return "inactive";
+function methodOrder(method: string): number {
+  const index = METHOD_PRIORITY.indexOf(
+    method as (typeof METHOD_PRIORITY)[number]
+  );
+  return index === -1 ? METHOD_PRIORITY.length : index;
 }
 
-const dayNames = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+function mapOperationsByMethod(
+  operations: Record<string, number>
+): DashboardOperationByMethod[] {
+  return Object.entries(operations)
+    .map(([method, count]) => ({
+      method,
+      operations: count,
+    }))
+    .sort((first, second) => {
+      const priorityDifference =
+        methodOrder(first.method) - methodOrder(second.method);
 
-function createWeeklyOperations(
-  transactions: Awaited<ReturnType<typeof transactionsService.getTransactions>>
-): DashboardWeeklyOperation[] {
-  const today = new Date();
-  const result: DashboardWeeklyOperation[] = [];
-
-  for (let daysAgo = 6; daysAgo >= 0; daysAgo -= 1) {
-    const date = new Date(today);
-    date.setHours(0, 0, 0, 0);
-    date.setDate(today.getDate() - daysAgo);
-
-    const nextDate = new Date(date);
-    nextDate.setDate(date.getDate() + 1);
-
-    const operations = transactions.filter((transaction) => {
-      const transactionDate = new Date(transaction.createdAt);
-
-      return transactionDate >= date && transactionDate < nextDate;
-    }).length;
-
-    result.push({
-      day: dayNames[date.getDay()],
-      operations,
+      return priorityDifference !== 0
+        ? priorityDifference
+        : first.method.localeCompare(second.method);
     });
+}
+
+function handleDashboardError(error: unknown): never {
+  if (error instanceof ApiError) {
+    if (error.status === 401) {
+      authStorage.clearSession();
+      window.location.assign("/login");
+      throw new Error("La sesión expiró. Inicie sesión nuevamente.");
+    }
+
+    if (error.status === 403) {
+      throw new Error("No tiene autorización para consultar el Dashboard.");
+    }
+
+    if (error.status && error.status >= 500) {
+      throw new Error(
+        "No fue posible cargar el Dashboard. Intente nuevamente."
+      );
+    }
   }
 
-  return result;
+  throw new Error(
+    "No fue posible cargar el Dashboard. Verifique su conexión e intente nuevamente."
+  );
 }
 
 export const dashboardService = {
-  async getSummary(): Promise<DashboardSummary> {
-    const [usersResponse, transactions, transactionSummary] =
-      await Promise.all([
-        apiClient<BackendPaginatedResponse>("/users/search", {
-          method: "POST",
-          body: {
-            filter: [],
-            query: "",
-            page: 0,
-            pageSize: 200,
-          },
-        }),
-
-        transactionsService.getTransactions({
-          search: "",
-          status: "all",
-          method: "all",
-          dateFrom: "",
-          dateTo: "",
-        }),
-
-        transactionsService.getSummary(),
+  async getSummary(): Promise<DashboardSummaryViewModel> {
+    try {
+      const [usersResponse, transactionsResponse] = await Promise.all([
+        apiClient<ApiResponse<UserSummaryData>>(endpoints.users.summary),
+        apiClient<ApiResponse<TransactionDashboardData>>(
+          `${endpoints.transactions.dashboard}?days=${DEFAULT_DASHBOARD_DAYS}`
+        ),
       ]);
 
-    const users = Array.isArray(usersResponse.data)
-      ? usersResponse.data
-      : [];
-
-    const activeUsers = users.filter(
-      (user) => normalizeStatus(user.status) === "active"
-    ).length;
-
-    const inactiveUsers = users.filter(
-      (user) => normalizeStatus(user.status) === "inactive"
-    ).length;
-
-    const qrOperations = transactions.filter(
-      (transaction) => transaction.method === "QR"
-    ).length;
-
-    const nfcOperations = transactions.filter(
-      (transaction) => transaction.method === "NFC"
-    ).length;
-
-    return {
-      totalUsers: usersResponse.totalElements ?? users.length,
-      activeUsers,
-      inactiveUsers,
-
-      totalTransactions: transactionSummary.total,
-      approvedTransactions: transactionSummary.approved,
-      pendingTransactions: transactionSummary.pending,
-      failedTransactions:
-        transactionSummary.failed + transactionSummary.cancelled,
-      approvedAmount: transactionSummary.approvedAmount,
-
-      operationsByMethod: [
-        {
-          method: "QR",
-          operations: qrOperations,
-        },
-        {
-          method: "NFC",
-          operations: nfcOperations,
-        },
-      ],
-
-      weeklyOperations: createWeeklyOperations(transactions),
-    };
+      return {
+        userSummary: usersResponse.data,
+        transactionSummary: transactionsResponse.data,
+        operationsByMethod: mapOperationsByMethod(
+          transactionsResponse.data.operationsByMethod
+        ),
+        dailyOperations: transactionsResponse.data.dailyOperations.map(
+          (operation) => ({
+            date: operation.date,
+            operations: operation.count,
+          })
+        ),
+      };
+    } catch (error) {
+      return handleDashboardError(error);
+    }
   },
 };

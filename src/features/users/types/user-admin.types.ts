@@ -2,6 +2,9 @@ export type UserStatus = "active" | "inactive";
 
 export interface UserAdminView {
   id: string;
+  userName: string;
+  name: string;
+  lastName: string;
   fullName: string;
   email: string;
   role: "user";
@@ -15,8 +18,25 @@ export interface UserFilters {
   status: "all" | "active" | "inactive";
 }
 
+export interface UsersPageResult {
+  items: UserAdminView[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface CreateUserRequest {
+  userName: string;
+  email: string;
+  name: string;
+  lastName: string;
+  password: string;
+}
+
 export interface UpdateUserRequest {
-  fullName: string;
+  name: string;
+  lastName: string;
   email: string;
 }
 

@@ -12,20 +12,36 @@ export default function UserEditForm({
   onSubmit,
   isSubmitting = false,
 }: UserEditFormProps) {
-  const [fullName, setFullName] = useState(user.fullName);
+  const [name, setName] = useState(user.name);
+  const [lastName, setLastName] = useState(user.lastName);
   const [email, setEmail] = useState(user.email);
   const [fieldErrors, setFieldErrors] = useState<{
-    fullName?: string;
+    name?: string;
+    lastName?: string;
     email?: string;
   }>({});
   const [generalError, setGeneralError] = useState("");
 
   const validate = () => {
-    const nextErrors: { fullName?: string; email?: string } = {};
+    const nextErrors: {
+      name?: string;
+      lastName?: string;
+      email?: string;
+    } = {};
 
-    if (!fullName.trim()) nextErrors.fullName = "El nombre es obligatorio.";
-    if (!email.trim()) nextErrors.email = "El correo es obligatorio.";
-    else if (!email.includes("@")) nextErrors.email = "Correo inválido.";
+    if (!name.trim()) {
+      nextErrors.name = "El nombre es obligatorio.";
+    }
+
+    if (!lastName.trim()) {
+      nextErrors.lastName = "El apellido es obligatorio.";
+    }
+
+    if (!email.trim()) {
+      nextErrors.email = "El correo es obligatorio.";
+    } else if (!email.includes("@")) {
+      nextErrors.email = "Correo inválido.";
+    }
 
     setFieldErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -35,11 +51,14 @@ export default function UserEditForm({
     event.preventDefault();
     setGeneralError("");
 
-    if (!validate()) return;
+    if (!validate()) {
+      return;
+    }
 
     try {
       await onSubmit({
-        fullName: fullName.trim(),
+        name: name.trim(),
+        lastName: lastName.trim(),
         email: email.trim().toLowerCase(),
       });
     } catch (error) {
@@ -50,20 +69,39 @@ export default function UserEditForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 rounded-xl border border-slate-200 bg-white p-6">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-5 rounded-xl border border-slate-200 bg-white p-6"
+    >
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          Nombre completo
+          Nombre
         </label>
         <input
           type="text"
-          value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-blue-500"
-          placeholder="Ej. Juan Pérez"
+          placeholder="Ej. Juan"
         />
-        {fieldErrors.fullName && (
-          <p className="mt-1 text-xs text-red-600">{fieldErrors.fullName}</p>
+        {fieldErrors.name && (
+          <p className="mt-1 text-xs text-red-600">{fieldErrors.name}</p>
+        )}
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700">
+          Apellido
+        </label>
+        <input
+          type="text"
+          value={lastName}
+          onChange={(event) => setLastName(event.target.value)}
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-blue-500"
+          placeholder="Ej. Pérez"
+        />
+        {fieldErrors.lastName && (
+          <p className="mt-1 text-xs text-red-600">{fieldErrors.lastName}</p>
         )}
       </div>
 

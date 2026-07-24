@@ -8,6 +8,7 @@ import UserStatusBadge from "./UserStatusBadge";
 type UsersTableProps = {
   users: UserAdminView[];
   onToggleStatus: (user: UserAdminView) => void;
+  onDelete: (user: UserAdminView) => void;
 };
 
 function formatDate(value: string) {
@@ -18,10 +19,12 @@ function formatDate(value: string) {
 export default function UsersTable({
   users,
   onToggleStatus,
+  onDelete,
 }: UsersTableProps) {
   const role = useAuthStore((state) => state.user?.role);
   const canEdit = hasPermission(role, "users:edit");
   const canToggleStatus = hasPermission(role, "users:status");
+  const canDelete = role === "admin";
 
   if (!users.length) {
     return (
@@ -83,6 +86,15 @@ export default function UsersTable({
                         className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                       >
                         {user.status === "active" ? "Desactivar" : "Activar"}
+                      </button>
+                    )}
+
+                    {canDelete && (
+                      <button
+                        onClick={() => onDelete(user)}
+                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
+                      >
+                        Eliminar
                       </button>
                     )}
                   </div>
