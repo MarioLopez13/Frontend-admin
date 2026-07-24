@@ -17,6 +17,15 @@ const getTransactionsMock = vi.mocked(
   transactionsService.getAdminTransactions
 );
 
+const defaultFilters = {
+  search: "",
+  status: "all",
+  method: "all",
+  type: "all",
+  from: "",
+  to: "",
+};
+
 function item(
   overrides: Partial<AdminTransactionView> = {}
 ): AdminTransactionView {
@@ -85,6 +94,7 @@ describe("TransactionsPage", () => {
     expect(getTransactionsMock).toHaveBeenCalledWith({
       page: 0,
       pageSize: 20,
+      ...defaultFilters,
     });
   });
 
@@ -105,6 +115,7 @@ describe("TransactionsPage", () => {
       expect(getTransactionsMock).toHaveBeenLastCalledWith({
         page: 1,
         pageSize: 20,
+        ...defaultFilters,
       });
     });
     expect(screen.getByRole("button", { name: "Siguiente" })).toBeDisabled();
@@ -138,6 +149,7 @@ describe("TransactionsPage", () => {
     expect(getTransactionsMock).toHaveBeenLastCalledWith({
       page: 0,
       pageSize: 20,
+      ...defaultFilters,
     });
   });
 
@@ -153,6 +165,71 @@ describe("TransactionsPage", () => {
     expect(getTransactionsMock).toHaveBeenLastCalledWith({
       page: 0,
       pageSize: 20,
+      ...defaultFilters,
+    });
+  });
+
+  it("applies filters globally and returns to backend page zero", async () => {
+    getTransactionsMock
+      .mockResolvedValueOnce(page())
+      .mockResolvedValueOnce(page({ page: 1 }))
+      .mockResolvedValueOnce(
+        page({ page: 0, totalElements: 1, totalPages: 1 })
+      );
+
+    render(<TransactionsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Siguiente" }));
+
+    await waitFor(() => {
+      expect(getTransactionsMock).toHaveBeenLastCalledWith({
+        page: 1,
+        pageSize: 20,
+        ...defaultFilters,
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText("Tipo"), {
+      target: { value: "PAYMENT" },
+    });
+
+    await waitFor(() => {
+      expect(getTransactionsMock).toHaveBeenLastCalledWith({
+        page: 0,
+        pageSize: 20,
+        ...defaultFilters,
+        type: "PAYMENT",
+      });
+    });
+  });
+
+  it("clears filters, returns to page zero and reloads", async () => {
+    getTransactionsMock.mockResolvedValue(page());
+
+    render(<TransactionsPage />);
+
+    await screen.findByText("Ruta Centro");
+    fireEvent.change(screen.getByLabelText("Método"), {
+      target: { value: "QR" },
+    });
+
+    await waitFor(() => {
+      expect(getTransactionsMock).toHaveBeenLastCalledWith({
+        page: 0,
+        pageSize: 20,
+        ...defaultFilters,
+        method: "QR",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar" }));
+
+    await waitFor(() => {
+      expect(getTransactionsMock).toHaveBeenLastCalledWith({
+        page: 0,
+        pageSize: 20,
+        ...defaultFilters,
+      });
     });
   });
 });

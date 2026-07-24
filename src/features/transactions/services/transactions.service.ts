@@ -37,11 +37,36 @@ function transactionError(error: unknown): never {
 export async function getAdminTransactions({
   page,
   pageSize,
+  search = "",
+  type = "all",
+  method = "all",
+  status = "all",
+  from = "",
+  to = "",
 }: GetAdminTransactionsParams): Promise<AdminTransactionPage> {
   const query = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
   });
+
+  if (search.trim()) {
+    query.set("search", search.trim());
+  }
+  if (type !== "all") {
+    query.set("type", type);
+  }
+  if (method !== "all") {
+    query.set("method", method);
+  }
+  if (status !== "all") {
+    query.set("status", status);
+  }
+  if (from) {
+    query.set("from", from);
+  }
+  if (to) {
+    query.set("to", to);
+  }
 
   try {
     const response = await apiClient<ApiResponse<TransactionPageData>>(

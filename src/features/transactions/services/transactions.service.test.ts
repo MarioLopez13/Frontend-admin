@@ -73,6 +73,44 @@ describe("transactions service", () => {
     ).rejects.toThrow("No tienes permisos para consultar las transacciones.");
   });
 
+  it("sends each supported filter only when it has a value", async () => {
+    apiClientMock.mockResolvedValue(response);
+
+    await getAdminTransactions({
+      page: 0,
+      pageSize: 20,
+      search: "  BUS 102  ",
+      type: "PAYMENT",
+      method: "QR",
+      status: "COMPLETED",
+      from: "2026-07-01",
+      to: "2026-07-24",
+    });
+
+    expect(apiClientMock).toHaveBeenCalledWith(
+      `${endpoints.transactions.admin}?page=0&pageSize=20&search=BUS+102&type=PAYMENT&method=QR&status=COMPLETED&from=2026-07-01&to=2026-07-24`
+    );
+  });
+
+  it("omits empty and all filter values", async () => {
+    apiClientMock.mockResolvedValue(response);
+
+    await getAdminTransactions({
+      page: 1,
+      pageSize: 10,
+      search: "   ",
+      type: "all",
+      method: "all",
+      status: "all",
+      from: "",
+      to: "",
+    });
+
+    expect(apiClientMock).toHaveBeenCalledWith(
+      `${endpoints.transactions.admin}?page=1&pageSize=10`
+    );
+  });
+
   it("never calls a legacy payment route", async () => {
     apiClientMock.mockResolvedValue(response);
 

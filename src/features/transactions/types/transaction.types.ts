@@ -48,11 +48,11 @@ export type TransactionFilters = {
   status: "all" | string;
   method: "all" | string;
   type: "all" | string;
-  dateFrom: string;
-  dateTo: string;
+  from: string;
+  to: string;
 };
 
-export type GetAdminTransactionsParams = {
+export type GetAdminTransactionsParams = Partial<TransactionFilters> & {
   page: number;
   pageSize: number;
 };

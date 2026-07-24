@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { exportCsv } from "@/shared/utils/exportCsv";
-import {
-  formatTransactionDate,
-} from "../services/transactions.adapter";
+import { formatTransactionDate } from "../services/transactions.adapter";
 import { transactionsService } from "../services/transactions.service";
 import type {
   AdminTransactionPage,
@@ -15,8 +13,8 @@ const initialFilters: TransactionFilters = {
   status: "all",
   method: "all",
   type: "all",
-  dateFrom: "",
-  dateTo: "",
+  from: "",
+  to: "",
 };
 
 function formatCurrency(value: number, currency = "USD") {
@@ -55,54 +53,6 @@ function getMethodClass(method: string | null) {
   }
 }
 
-function localDateKey(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: "America/Guayaquil",
-  }).format(date);
-}
-
-function matchesFilters(
-  transaction: AdminTransactionView,
-  filters: TransactionFilters
-) {
-  const query = filters.search.trim().toLowerCase();
-  const transactionDate = localDateKey(transaction.occurredAt);
-  const searchable = [
-    transaction.id,
-    transaction.userId,
-    transaction.walletId,
-    transaction.busCode,
-    transaction.routeName,
-    transaction.type,
-    transaction.typeLabel,
-    transaction.method,
-    transaction.methodLabel,
-    transaction.status,
-    transaction.statusLabel,
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(" ")
-    .toLowerCase();
-
-  return (
-    (!query || searchable.includes(query)) &&
-    (filters.status === "all" || transaction.status === filters.status) &&
-    (filters.method === "all" || transaction.method === filters.method) &&
-    (filters.type === "all" || transaction.type === filters.type) &&
-    (!filters.dateFrom || transactionDate >= filters.dateFrom) &&
-    (!filters.dateTo || transactionDate <= filters.dateTo)
-  );
-}
-
 export default function TransactionsPage() {
   const [data, setData] = useState<AdminTransactionPage | null>(null);
   const [filters, setFilters] = useState<TransactionFilters>(initialFilters);
@@ -123,7 +73,7 @@ export default function TransactionsPage() {
     setSelectedTransaction(null);
 
     transactionsService
-      .getAdminTransactions({ page, pageSize })
+      .getAdminTransactions({ page, pageSize, ...filters })
       .then((result) => {
         if (active) {
           setData(result);
@@ -149,12 +99,9 @@ export default function TransactionsPage() {
     return () => {
       active = false;
     };
-  }, [page, pageSize, refreshVersion]);
+  }, [page, pageSize, filters, refreshVersion]);
 
-  const visibleTransactions = useMemo(
-    () => (data?.items ?? []).filter((item) => matchesFilters(item, filters)),
-    [data, filters]
-  );
+  const visibleTransactions = data?.items ?? [];
 
   const pageSummary = useMemo(() => {
     const completed = visibleTransactions.filter(
@@ -181,9 +128,16 @@ export default function TransactionsPage() {
     value: TransactionFilters[K]
   ) => {
     setFilters((current) => ({ ...current, [key]: value }));
+    setPage(0);
   };
 
   const refresh = () => {
+    setRefreshVersion((current) => current + 1);
+  };
+
+  const clearFilters = () => {
+    setFilters(initialFilters);
+    setPage(0);
     setRefreshVersion((current) => current + 1);
   };
 
@@ -270,11 +224,6 @@ export default function TransactionsPage() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Los filtros se aplican únicamente a la página actual. El endpoint no
-          ofrece filtros globales.
-        </div>
-
         <div className="grid gap-4 lg:grid-cols-[1.4fr_repeat(3,0.8fr)_repeat(2,0.8fr)_auto]">
           <FilterField label="Buscar">
             <input
@@ -331,8 +280,8 @@ export default function TransactionsPage() {
           <FilterField label="Desde">
             <input
               type="date"
-              value={filters.dateFrom}
-              onChange={(event) => updateFilter("dateFrom", event.target.value)}
+              value={filters.from}
+              onChange={(event) => updateFilter("from", event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2"
             />
           </FilterField>
@@ -340,8 +289,8 @@ export default function TransactionsPage() {
           <FilterField label="Hasta">
             <input
               type="date"
-              value={filters.dateTo}
-              onChange={(event) => updateFilter("dateTo", event.target.value)}
+              value={filters.to}
+              onChange={(event) => updateFilter("to", event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2"
             />
           </FilterField>
@@ -349,7 +298,7 @@ export default function TransactionsPage() {
           <div className="flex items-end">
             <button
               type="button"
-              onClick={() => setFilters(initialFilters)}
+              onClick={clearFilters}
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Limpiar
@@ -380,12 +329,6 @@ export default function TransactionsPage() {
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
           <p className="font-semibold text-slate-900">
             No existen transacciones registradas.
-          </p>
-        </div>
-      ) : visibleTransactions.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
-          <p className="font-semibold text-slate-900">
-            Ninguna transacción de esta página coincide con los filtros.
           </p>
         </div>
       ) : (

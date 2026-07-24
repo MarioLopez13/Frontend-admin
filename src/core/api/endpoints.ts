@@ -20,4 +20,7 @@ export const endpoints = {
     admin: "/admin/transactions",
     dashboard: "/admin/transactions/dashboard",
   },
+  payments: {
+    admin: "/payments",
+  },
 } as const;
