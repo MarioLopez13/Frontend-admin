@@ -243,10 +243,7 @@ export default function TransactionsPage() {
               <option value="all">Todos</option>
               <option value="PAYMENT">Pago</option>
               <option value="TOP_UP">Recarga</option>
-              <option value="CREDIT">Crédito</option>
-              <option value="DEBIT">Débito</option>
-              <option value="REFUND">Reembolso</option>
-              <option value="WALLET_CREATED">Creación de billetera</option>
+            
             </select>
           </FilterField>
 
@@ -259,8 +256,7 @@ export default function TransactionsPage() {
               <option value="all">Todos</option>
               <option value="COMPLETED">Completada</option>
               <option value="PENDING">Pendiente</option>
-              <option value="FAILED">Fallida</option>
-              <option value="REFUNDED">Reembolsada</option>
+              
             </select>
           </FilterField>
 
