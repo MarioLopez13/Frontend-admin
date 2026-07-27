@@ -35,4 +35,16 @@ export interface IdentityLoginResponse {
   expires_in: number;
 }
 
+export interface TokenRefreshResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+  refresh_expires_in?: number;
+  token_type?: string;
+  session_state?: string;
+  scope?: string;
+  error?: string;
+  error_description?: string;
+}
+
 export interface LoginResponse extends AuthSession {}

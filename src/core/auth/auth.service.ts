@@ -9,6 +9,7 @@ import type {
   IdentityLoginResponse,
   LoginRequest,
   LoginResponse,
+  TokenRefreshResponse,
 } from "./auth.types";
 import { authStorage } from "./auth.storage";
 
@@ -69,7 +70,13 @@ function resolveRole(payload: JwtPayload): AppRole {
   throw new Error("No tienes autorización para acceder a SmartPayUT.");
 }
 
-function buildSession(response: IdentityLoginResponse): AuthSession {
+type BuildSessionInput = {
+  access_token: string;
+  refresh_token?: string;
+  userId?: string;
+};
+
+function buildSession(response: BuildSessionInput): AuthSession {
   if (!response.access_token) {
     throw new Error("No se recibió una sesión válida. Intenta nuevamente.");
   }
@@ -157,5 +164,49 @@ export const authService = {
     if (!session) return null;
 
     return session.user;
+  },
+
+  async refreshSession(): Promise<AuthSession | null> {
+    const session = authStorage.getSession();
+    const currentRefreshToken = session?.refreshToken;
+
+    if (!currentRefreshToken) {
+      authStorage.clearSession();
+      return null;
+    }
+
+    try {
+      // Raw fetch to bypass apiClient interceptor and avoid infinite refresh loops
+      const response = await fetch(
+        `${env.apiBaseUrl}${endpoints.auth.refresh}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Client-Token": "pQfoROQs2QG0WuXwLvuCHocprzq87w774sF5XtVhuMU",
+          },
+          body: JSON.stringify({ refreshToken: currentRefreshToken }),
+        }
+      );
+
+      if (!response.ok) {
+        authStorage.clearSession();
+        return null;
+      }
+
+      const data = (await response.json()) as TokenRefreshResponse;
+
+      if (data.error || !data.access_token) {
+        authStorage.clearSession();
+        return null;
+      }
+
+      const newSession = buildSession(data);
+      authStorage.setSession(newSession);
+      return newSession;
+    } catch {
+      authStorage.clearSession();
+      return null;
+    }
   },
 };

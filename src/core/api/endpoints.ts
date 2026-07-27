@@ -6,7 +6,7 @@ export const endpoints = {
     // estos los dejamos igual por ahora
     logout: "/auth/logout",
     me: "/auth/me",
-    refresh: "/auth/refresh",
+    refresh: "/auth/refresh-token",
   },
   users: {
     search: "/users/search",

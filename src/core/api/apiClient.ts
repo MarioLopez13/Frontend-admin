@@ -1,5 +1,7 @@
 import { env } from "@/app/config/env";
 import { authStorage } from "@/core/auth/auth.storage";
+import { endpoints } from "@/core/api/endpoints";
+import type { AuthSession } from "@/core/auth/auth.types";
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
@@ -167,7 +169,48 @@ async function parseResponsePayload(response: Response): Promise<unknown> {
   }
 }
 
-export async function apiClient<T>(
+// --- Token refresh infrastructure ---
+
+type RefreshFn = () => Promise<AuthSession | null>;
+type RefreshSuccessCallback = (session: AuthSession) => void;
+
+let registeredRefreshFn: RefreshFn | null = null;
+let registeredOnRefreshSuccess: RefreshSuccessCallback | null = null;
+let refreshPromise: Promise<AuthSession | null> | null = null;
+
+export function registerTokenRefresh(
+  refreshFn: RefreshFn,
+  onSuccess?: RefreshSuccessCallback
+): void {
+  registeredRefreshFn = refreshFn;
+  registeredOnRefreshSuccess = onSuccess ?? null;
+}
+
+function isRefreshEndpoint(path: string): boolean {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return normalizedPath === endpoints.auth.refresh;
+}
+
+async function attemptTokenRefresh(): Promise<AuthSession | null> {
+  if (!registeredRefreshFn) return null;
+
+  // Mutex: if a refresh is already in progress, reuse its promise
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = registeredRefreshFn();
+
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+}
+
+// --- Core request execution ---
+
+async function executeRequest<T>(
   path: string,
   { method = "GET", headers, body, token }: RequestOptions = {}
 ): Promise<T> {
@@ -212,5 +255,41 @@ export async function apiClient<T>(
         title: "Servicio no disponible",
       }
     );
+  }
+}
+
+// --- Public API with 401 interceptor ---
+
+export async function apiClient<T>(
+  path: string,
+  options: RequestOptions = {}
+): Promise<T> {
+  try {
+    return await executeRequest<T>(path, options);
+  } catch (error) {
+    // Only intercept 401s, and never for the refresh endpoint itself
+    if (
+      error instanceof ApiError &&
+      error.status === 401 &&
+      !isRefreshEndpoint(path)
+    ) {
+      const newSession = await attemptTokenRefresh();
+
+      if (newSession) {
+        registeredOnRefreshSuccess?.(newSession);
+        return await executeRequest<T>(path, {
+          ...options,
+          token: newSession.accessToken,
+        });
+      }
+
+      // Refresh failed — clear session and redirect to login
+      authStorage.clearSession();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+    }
+
+    throw error;
   }
 }

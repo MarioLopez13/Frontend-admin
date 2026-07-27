@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { authService } from "@/core/auth/auth.service";
+import { registerTokenRefresh } from "@/core/api/apiClient";
 import type { AuthSession, LoginRequest } from "@/core/auth/auth.types";
 
 type AuthStore = {
@@ -10,6 +11,7 @@ type AuthStore = {
   hydrateSession: () => Promise<void>;
   login: (payload: LoginRequest) => Promise<void>;
   logout: () => void;
+  refreshSession: () => Promise<boolean>;
 };
 
 export const useAuthStore = create<AuthStore>((set) => ({
@@ -77,4 +79,37 @@ export const useAuthStore = create<AuthStore>((set) => ({
       isHydrated: true,
     });
   },
+
+  refreshSession: async () => {
+    const session = await authService.refreshSession();
+
+    if (session) {
+      set({
+        session,
+        user: session.user,
+        isAuthenticated: true,
+      });
+      return true;
+    }
+
+    set({
+      session: null,
+      user: null,
+      isAuthenticated: false,
+    });
+    return false;
+  },
 }));
+
+// Register token refresh with apiClient so the 401 interceptor
+// can refresh tokens and keep the store in sync automatically.
+registerTokenRefresh(
+  () => authService.refreshSession(),
+  (session) => {
+    useAuthStore.setState({
+      session,
+      user: session.user,
+      isAuthenticated: true,
+    });
+  }
+);
