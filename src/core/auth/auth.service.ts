@@ -23,6 +23,10 @@ type JwtPayload = {
   realm_access?: {
     roles?: string[];
   };
+  resource_access?: Record<
+    string,
+    { roles?: string[] }
+  >;
 };
 
 function isValidSession(session: AuthSession | null): session is AuthSession {
@@ -59,13 +63,16 @@ function decodeJwtPayload(token: string): JwtPayload {
 }
 
 function resolveRole(payload: JwtPayload): AppRole {
-  const roles = (payload.realm_access?.roles ?? []).map((role) =>
+  const realmRoles = payload.realm_access?.roles ?? [];
+  const clientRoles =
+    payload.resource_access?.["smartpayut-admin"]?.roles ?? [];
+  const allRoles = [...realmRoles, ...clientRoles].map((role) =>
     role.toUpperCase()
   );
 
-  if (roles.includes("ADMIN")) return "admin";
-  if (roles.includes("OPERATOR")) return "operator";
-  if (roles.includes("USER")) return "user";
+  if (allRoles.includes("ADMIN")) return "admin";
+  if (allRoles.includes("OPERATOR")) return "operator";
+  if (allRoles.includes("USER")) return "user";
 
   throw new Error("No tienes autorización para acceder a SmartPayUT.");
 }
